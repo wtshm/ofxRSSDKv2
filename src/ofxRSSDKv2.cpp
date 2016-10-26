@@ -4,7 +4,7 @@
 
 namespace ofxRSSDK
 {
-	RSDevice::~RSDevice(){}
+	RSDevice::~RSDevice() {}
 	RSDevice::RSDevice()
 	{
 		mIsInit = false;
@@ -16,7 +16,8 @@ namespace ofxRSSDK
 		mShouldGetPointCloud = false;
 		mShouldGetFaces = false;
 		mShouldGetBlobs = false;
-		mPointCloudRange = ofVec2f(0,3000);
+		mShouldGetPeople = false;
+		mPointCloudRange = ofVec2f(0, 3000);
 		mCloudRes = CloudRes::FULL_RES;
 	}
 
@@ -51,7 +52,7 @@ namespace ofxRSSDK
 			if (cStatus >= PXC_STATUS_NO_ERROR)
 			{
 				mHasRgb = true;
-				mRgbFrame.allocate(mRgbSize.x, mRgbSize.y,ofPixelFormat::OF_PIXELS_BGRA);
+				mRgbFrame.allocate(mRgbSize.x, mRgbSize.y, ofPixelFormat::OF_PIXELS_BGRA);
 			}
 		}
 
@@ -66,16 +67,16 @@ namespace ofxRSSDK
 			switch (pSize)
 			{
 			case DepthRes::R200_SD:
-				mDepthSize = ofVec2f(480,360);
+				mDepthSize = ofVec2f(480, 360);
 				break;
 			case DepthRes::R200_VGA:
-				mDepthSize = ofVec2f(628,468);
+				mDepthSize = ofVec2f(628, 468);
 				break;
 			case DepthRes::F200_VGA:
-				mDepthSize = ofVec2f(640,480);
+				mDepthSize = ofVec2f(640, 480);
 				break;
 			case DepthRes::QVGA:
-				mDepthSize = ofVec2f(320,240);
+				mDepthSize = ofVec2f(320, 240);
 				break;
 			}
 			cStatus = mSenseMgr->EnableStream(PXCCapture::STREAM_TYPE_DEPTH, mDepthSize.x, mDepthSize.y, pFPS);
@@ -83,7 +84,7 @@ namespace ofxRSSDK
 			{
 				mHasDepth = true;
 				mShouldGetDepthAsColor = pAsColor;
-				mDepthFrame.allocate(mDepthSize.x, mDepthSize.y,1);
+				mDepthFrame.allocate(mDepthSize.x, mDepthSize.y, 1);
 				mDepth8uFrame.allocate(mDepthSize.x, mDepthSize.y, ofPixelFormat::OF_PIXELS_RGBA);
 				mRawDepth = new uint16_t[(int)mDepthSize.x*(int)mDepthSize.y];
 			}
@@ -92,9 +93,9 @@ namespace ofxRSSDK
 	}
 #pragma endregion
 
-	void RSDevice::setPointCloudRange(float pMin=100.0f, float pMax=1500.0f)
+	void RSDevice::setPointCloudRange(float pMin = 100.0f, float pMax = 1500.0f)
 	{
-		mPointCloudRange = ofVec2f(pMin,pMax);
+		mPointCloudRange = ofVec2f(pMin, pMax);
 	}
 
 	bool RSDevice::start()
@@ -119,7 +120,7 @@ namespace ofxRSSDK
 		pxcStatus cStatus;
 		if (mSenseMgr)
 		{
-			cStatus = mSenseMgr->AcquireFrame(false,0);
+			cStatus = mSenseMgr->AcquireFrame(false, 0);
 			if (cStatus < PXC_STATUS_NO_ERROR)
 				return false;
 			PXCCapture::Sample *mCurrentSample = mSenseMgr->QuerySample();
@@ -137,11 +138,11 @@ namespace ofxRSSDK
 					cColorImage->ReleaseAccess(&cColorData);
 					return false;
 				}
-				mRgbFrame.setFromExternalPixels(reinterpret_cast<uint8_t *>(cColorData.planes[0]), mRgbSize.x, mRgbSize.y,4);
+				mRgbFrame.setFromExternalPixels(reinterpret_cast<uint8_t *>(cColorData.planes[0]), mRgbSize.x, mRgbSize.y, 4);
 
 				cColorImage->ReleaseAccess(&cColorData);
 				if (!mHasDepth)
-				{	
+				{
 					mSenseMgr->ReleaseFrame();
 					return true;
 				}
@@ -153,14 +154,14 @@ namespace ofxRSSDK
 				PXCImage *cDepthImage = mCurrentSample->depth;
 				PXCImage::ImageData cDepthData;
 				cStatus = cDepthImage->AcquireAccess(PXCImage::ACCESS_READ, PXCImage::PIXEL_FORMAT_DEPTH, &cDepthData);
-				
+
 				if (cStatus < PXC_STATUS_NO_ERROR)
 				{
 					cDepthImage->ReleaseAccess(&cDepthData);
 					return false;
 				}
 				mDepthFrame.setFromExternalPixels(reinterpret_cast<uint16_t *>(cDepthData.planes[0]), mDepthSize.x, mDepthSize.y, 1);
-				memcpy(mRawDepth, reinterpret_cast<uint16_t *>(cDepthData.planes[0]), (size_t)((int)mDepthSize.x*(int)mDepthSize.y*sizeof(uint16_t)));			
+				memcpy(mRawDepth, reinterpret_cast<uint16_t *>(cDepthData.planes[0]), (size_t)((int)mDepthSize.x*(int)mDepthSize.y * sizeof(uint16_t)));
 				cDepthImage->ReleaseAccess(&cDepthData);
 
 				if (mShouldGetDepthAsColor)
@@ -176,9 +177,14 @@ namespace ofxRSSDK
 					cDepthImage->ReleaseAccess(&cDepth8uData);
 				}
 
-				if(mShouldGetPointCloud)
+				if (mShouldGetPointCloud)
 				{
 					updatePointCloud();
+				}
+
+				if (mShouldGetPeople)
+				{
+					updatePersonTracking();
 				}
 
 				if (!mHasRgb)
@@ -188,7 +194,7 @@ namespace ofxRSSDK
 				}
 			}
 
-			if (mHasDepth&&mHasRgb&&mShouldAlign&&mAlignMode==AlignMode::ALIGN_FRAME)
+			if (mHasDepth&&mHasRgb&&mShouldAlign&&mAlignMode == AlignMode::ALIGN_FRAME)
 			{
 				PXCImage *cMappedColor = mCoordinateMapper->CreateColorImageMappedToDepth(mCurrentSample->depth, mCurrentSample->color);
 				PXCImage *cMappedDepth = mCoordinateMapper->CreateDepthImageMappedToColor(mCurrentSample->color, mCurrentSample->depth);
@@ -233,73 +239,102 @@ namespace ofxRSSDK
 		{
 			mCoordinateMapper->Release();
 			mSenseMgr->Close();
-			if(mShouldGetBlobs)
+			if (mShouldGetBlobs)
 			{
-				if(mBlobTracker)
+				if (mBlobTracker)
 					mBlobTracker->Release();
 			}
-			if(mShouldGetFaces)
+			if (mShouldGetFaces)
 			{
-				if(mFaceTracker)
+				if (mFaceTracker)
 					mFaceTracker->Release();
+			}
+			if (mShouldGetPeople)
+			{
+				if (mPersonTracker)
+					mPersonTracker->Release();
 			}
 			return true;
 		}
-		delete [] mRawDepth;
+		delete[] mRawDepth;
 		return false;
 	}
 
 #pragma region Enable
-		bool RSDevice::enableFaceTracking(bool pUseDepth)
+	bool RSDevice::enableFaceTracking(bool pUseDepth)
+	{
+		if (mSenseMgr)
 		{
-			if(mSenseMgr)
+			if (mSenseMgr->EnableFace() >= PXC_STATUS_NO_ERROR)
 			{
-				if(mSenseMgr->EnableFace()>=PXC_STATUS_NO_ERROR)
+				mFaceTracker = mSenseMgr->QueryFace();
+				if (mFaceTracker)
 				{
-					mFaceTracker = mSenseMgr->QueryFace();
-					if(mFaceTracker)
+					PXCFaceConfiguration *config = mFaceTracker->CreateActiveConfiguration();
+					switch (pUseDepth)
 					{
-						PXCFaceConfiguration *config = mFaceTracker->CreateActiveConfiguration();
-						switch(pUseDepth)
-						{
-						case true:
-							config->SetTrackingMode(PXCFaceConfiguration::TrackingModeType::FACE_MODE_COLOR_PLUS_DEPTH);
-							break;
-						case false:
-							config->SetTrackingMode(PXCFaceConfiguration::TrackingModeType::FACE_MODE_COLOR);
-							break;
-						}
-						config->ApplyChanges();
-						config->Release();
-						mShouldGetFaces = true;
+					case true:
+						config->SetTrackingMode(PXCFaceConfiguration::TrackingModeType::FACE_MODE_COLOR_PLUS_DEPTH);
+						break;
+					case false:
+						config->SetTrackingMode(PXCFaceConfiguration::TrackingModeType::FACE_MODE_COLOR);
+						break;
 					}
-					else
-						mShouldGetFaces = false;
-					return mShouldGetFaces;
+					config->ApplyChanges();
+					config->Release();
+					mShouldGetFaces = true;
 				}
-				return false;
+				else
+					mShouldGetFaces = false;
+				return mShouldGetFaces;
 			}
 			return false;
 		}
+		return false;
+	}
 
-		bool RSDevice::enableBlobTracking()
+	bool RSDevice::enableBlobTracking()
+	{
+		if (mSenseMgr)
 		{
-			if(mSenseMgr)
+			if (mSenseMgr->EnableBlob() >= PXC_STATUS_NO_ERROR)
 			{
-				if(mSenseMgr->EnableBlob()>=PXC_STATUS_NO_ERROR)
-				{
-					mBlobTracker = mSenseMgr->QueryBlob();
-					if(mBlobTracker)
-						mShouldGetBlobs = true;
-					else
-						mShouldGetBlobs = false;
-					return mShouldGetBlobs;
-				}
-				return false;
+				mBlobTracker = mSenseMgr->QueryBlob();
+				if (mBlobTracker)
+					mShouldGetBlobs = true;
+				else
+					mShouldGetBlobs = false;
+				return mShouldGetBlobs;
 			}
 			return false;
-
 		}
+		return false;
+
+	}
+
+	bool RSDevice::enablePersonTracking()
+	{
+		if (mSenseMgr)
+		{
+			if (mSenseMgr->EnablePersonTracking() >= PXC_STATUS_NO_ERROR)
+			{
+				mPersonTracker = mSenseMgr->QueryPersonTacking();
+				// PXCPersonTrackingConfiguration* personTrackingConfiguration = personTrackingModule->QueryConfiguration();
+				// PXCPersonTrackingConfiguration::ExpressionsConfiguration* expressionsConfig = personTrackingConfiguration->QueryExpressions();
+				// expressionsConfig->Enable();
+				// expressionsConfig->EnableAllExpressions();
+				if (mPersonTracker)
+				{
+					mShouldGetPeople = true;
+				}
+				else
+					mShouldGetPeople = false;
+				return mShouldGetPeople;
+			}
+			return false;
+		}
+		return false;
+	}
 #pragma endregion
 
 #pragma region Update
@@ -310,13 +345,13 @@ namespace ofxRSSDK
 		int step = (int)mCloudRes;
 		mPointCloud.clear();
 		vector<PXCPoint3DF32> depthPoints, worldPoints;
-		for (int dy = 0; dy < height;dy+=step)
+		for (int dy = 0; dy < height; dy += step)
 		{
-			for (int dx = 0; dx < width; dx+=step)
+			for (int dx = 0; dx < width; dx += step)
 			{
 				PXCPoint3DF32 cPoint;
 				cPoint.x = dx; cPoint.y = dy; cPoint.z = (float)mRawDepth[dy*width + dx];
-				if(cPoint.z>mPointCloudRange.x&&cPoint.z<mPointCloudRange.y)
+				if (cPoint.z>mPointCloudRange.x&&cPoint.z<mPointCloudRange.y)
 					depthPoints.push_back(cPoint);
 			}
 		}
@@ -324,10 +359,36 @@ namespace ofxRSSDK
 		worldPoints.resize(depthPoints.size());
 		mCoordinateMapper->ProjectDepthToCamera(depthPoints.size(), &depthPoints[0], &worldPoints[0]);
 
-		for (int i = 0; i < depthPoints.size();++i)
+		for (int i = 0; i < depthPoints.size(); ++i)
 		{
 			PXCPoint3DF32 p = worldPoints[i];
 			mPointCloud.push_back(ofVec3f(p.x, p.y, p.z));
+		}
+	}
+
+	void RSDevice::updatePersonTracking()
+	{
+		PXCPersonTrackingData *data = mPersonTracker->QueryOutput();
+		if (data)
+		{
+			pxcI32 numPeople = data->QueryNumberOfPeople();
+			if (numPeople > 0)
+			{
+				PXCPersonTrackingData::Person *person = data->QueryPersonData(PXCPersonTrackingData::ACCESS_ORDER_BY_ID, 0);
+				PXCPersonTrackingData::PersonTracking* trackedPerson = person->QueryTracking();
+
+				PXCPersonTrackingData::PersonTracking::PointCombined centerMass = trackedPerson->QueryCenterMass();
+				mCenterMass = ofVec3f(centerMass.world.point.x, centerMass.world.point.y, centerMass.world.point.z);
+
+				PXCPersonTrackingData::BoundingBox2D boundingBox = trackedPerson->Query2DBoundingBox();
+				mBoundingBox = ofRectangle(boundingBox.rect.x, boundingBox.rect.y, boundingBox.rect.w, boundingBox.rect.h);
+
+				PXCPersonTrackingData::PoseEulerAngles angles;
+				if (trackedPerson->QueryHeadPose(angles))
+				{
+					mHeadPose = ofVec3f(angles.roll, angles.pitch, angles.yaw);
+				}
+			}
 		}
 	}
 #pragma endregion
@@ -361,6 +422,21 @@ namespace ofxRSSDK
 	vector<ofVec3f> RSDevice::getPointCloud()
 	{
 		return mPointCloud;
+	}
+
+	ofVec3f RSDevice::getCenterMassOfTrackedPerson()
+	{
+		return mCenterMass;
+	}
+
+	ofRectangle RSDevice::getBoundingBoxOfTrackedPerson()
+	{
+		return mBoundingBox;
+	}
+
+	ofVec3f RSDevice::getHeadPoseOfTrackedPerson()
+	{
+		return mHeadPose;
 	}
 
 	//Nomenclature Notes:
@@ -429,7 +505,7 @@ namespace ofxRSSDK
 	const ofColor RSDevice::getColorFromDepthImage(int pImageX, int pImageY, uint16_t pImageZ)
 	{
 		if (mCoordinateMapper)
-			return getColorFromDepthImage(static_cast<float>(pImageX),static_cast<float>(pImageY),static_cast<float>(pImageZ));
+			return getColorFromDepthImage(static_cast<float>(pImageX), static_cast<float>(pImageY), static_cast<float>(pImageZ));
 		return ofColor::black;
 	}
 
@@ -441,7 +517,7 @@ namespace ofxRSSDK
 	}
 
 
-		//get a ofColor object from a depth camera space point
+	//get a ofColor object from a depth camera space point
 	const ofColor RSDevice::getColorFromDepthSpace(float pCameraX, float pCameraY, float pCameraZ)
 	{
 		if (mCoordinateMapper)
@@ -457,7 +533,7 @@ namespace ofxRSSDK
 
 			int imageX = static_cast<int>(mOutPoints2D[0].x);
 			int imageY = static_cast<int>(mOutPoints2D[0].y);
-			if( (imageX>=0&&imageX<mRgbSize.x)  &&(imageY>=0&&imageY<mRgbSize.y))
+			if ((imageX >= 0 && imageX<mRgbSize.x) && (imageY >= 0 && imageY<mRgbSize.y))
 				return mRgbFrame.getColor(imageX, imageY);
 			return ofColor::black;
 		}
@@ -471,7 +547,7 @@ namespace ofxRSSDK
 		return ofColor::black;
 	}
 
-		//get ofColor space UVs from a depth image point
+	//get ofColor space UVs from a depth image point
 	const ofVec2f RSDevice::getColorCoordsFromDepthImage(float pImageX, float pImageY, float pImageZ)
 	{
 		if (mCoordinateMapper)
@@ -506,7 +582,7 @@ namespace ofxRSSDK
 		return getColorCoordsFromDepthImage(pImageCoords.x, pImageCoords.y, pImageCoords.z);
 	}
 
-		//get ofColor space UVs from a depth space point
+	//get ofColor space UVs from a depth space point
 	const ofVec2f RSDevice::getColorCoordsFromDepthSpace(float pCameraX, float pCameraY, float pCameraZ)
 	{
 		if (mCoordinateMapper)

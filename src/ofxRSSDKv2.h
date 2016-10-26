@@ -12,6 +12,8 @@
 #include "pxcblobmodule.h"
 #include "pxcfacemodule.h"
 #include "pxcfaceconfiguration.h"
+#include "pxcpersontrackingmodule.h"
+#include "pxcpersontrackingdata.h"
 
 using namespace std;
 
@@ -44,9 +46,9 @@ namespace ofxRSSDK
 
 	enum CloudRes
 	{
-		FULL_RES=1,
-		HALF_RES=2,
-		Q_RES=4
+		FULL_RES = 1,
+		HALF_RES = 2,
+		Q_RES = 4
 	};
 
 	class RSDevice
@@ -60,11 +62,12 @@ namespace ofxRSSDK
 		bool init();
 		bool initRgb(const RGBRes& pSize, const float& pFPS);
 		bool initDepth(const DepthRes& pSize, const float& pFPS, bool pAsColor);
-		
+
 		void enableAlignedImages(bool pState = true, AlignMode pMode = AlignMode::ALIGN_UVS_ONLY) { mShouldAlign = pState; mAlignMode = pMode; }
-		void enablePointCloud(CloudRes pCloudRes, float pMinDepth, float pMaxDepth) { mCloudRes=pCloudRes; mShouldGetPointCloud=true; mPointCloudRange = ofVec2f(pMinDepth,pMaxDepth);}
+		void enablePointCloud(CloudRes pCloudRes, float pMinDepth, float pMaxDepth) { mCloudRes = pCloudRes; mShouldGetPointCloud = true; mPointCloudRange = ofVec2f(pMinDepth, pMaxDepth); }
 		bool enableFaceTracking(bool pUseDepth);
 		bool enableBlobTracking();
+		bool enablePersonTracking();
 
 		void setPointCloudRange(float pMin, float pMax);
 
@@ -78,6 +81,9 @@ namespace ofxRSSDK
 		const ofPixels&	getColorMappedToDepthFrame();
 		const ofPixels&	getDepthMappedToColorFrame();
 		vector<ofVec3f> getPointCloud();
+		ofVec3f getCenterMassOfTrackedPerson();
+		ofRectangle getBoundingBoxOfTrackedPerson();
+		ofVec3f getHeadPoseOfTrackedPerson();
 		//Nomenclature Notes:
 		//	"Space" denotes a 3d coordinate
 		//	"Image" denotes an image space point ((0, width), (0,height), (image depth))
@@ -107,8 +113,8 @@ namespace ofxRSSDK
 		const ofVec2f		getColorCoordsFromDepthSpace(float pCameraX, float pCameraY, float pCameraZ);
 		const ofVec2f		getColorCoordsFromDepthSpace(ofPoint pCameraPoint);
 
-		const ofVec2f&	getDepthSize() { return mDepthSize;  }
-		const int		getDepthWidth() { return mDepthSize.x;  }
+		const ofVec2f&	getDepthSize() { return mDepthSize; }
+		const int		getDepthWidth() { return mDepthSize.x; }
 		const int		getDepthHeight() { return mDepthSize.y; }
 
 		const ofVec2f&	getRgbSize() { return mRgbSize; }
@@ -119,16 +125,18 @@ namespace ofxRSSDK
 		void			updatePointCloud();
 		void			updateFaces();
 		void			updateBlobs();
+		void			updatePersonTracking();
 
 		bool			mIsInit,
-						mIsRunning,
-						mHasRgb,
-						mHasDepth,
-						mShouldAlign,
-						mShouldGetDepthAsColor,
-						mShouldGetPointCloud,
-						mShouldGetFaces,
-						mShouldGetBlobs;
+			mIsRunning,
+			mHasRgb,
+			mHasDepth,
+			mShouldAlign,
+			mShouldGetDepthAsColor,
+			mShouldGetPointCloud,
+			mShouldGetFaces,
+			mShouldGetBlobs,
+			mShouldGetPeople;
 
 		AlignMode		mAlignMode;
 		CloudRes		mCloudRes;
@@ -148,12 +156,17 @@ namespace ofxRSSDK
 
 		PXCBlobModule		*mBlobTracker;
 		PXCFaceModule		*mFaceTracker;
+		PXCPersonTrackingModule	*mPersonTracker;
 
 		vector<PXCPoint3DF32>	mInPoints3D;
 		vector<PXCPoint3DF32>	mOutPoints3D;
 		vector<PXCPointF32>		mOutPoints2D;
 		vector<ofVec3f>			mPointCloud;
 		uint16_t				*mRawDepth;
+
+		ofVec3f			mCenterMass;
+		ofRectangle		mBoundingBox;
+		ofVec3f			mHeadPose;
 	};
 };
 #endif
